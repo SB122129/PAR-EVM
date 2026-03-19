@@ -1,0 +1,15 @@
+[package]
+name = "portal-wallet"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+portal = { path = "../portal" }
+
+nwc = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+axum = { workspace = true }
+thiserror = { workspace = true }
+
+breez-sdk-spark = { workspace = true }
+tracing = { workspace = true }

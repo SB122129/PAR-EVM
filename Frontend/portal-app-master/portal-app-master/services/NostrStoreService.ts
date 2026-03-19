@@ -1,0 +1,35 @@
+import { type KeypairInterface, PortalDb, type PortalDbInterface } from '@/utils/mockNative';
+
+const MINTS_KEY = 'mints_key';
+
+export default class NostrStoreService {
+  private portalDb: PortalDbInterface;
+
+  private constructor(portalDb: PortalDbInterface) {
+    this.portalDb = portalDb;
+  }
+
+  static async create(keypair: KeypairInterface, relays: string[]): Promise<NostrStoreService> {
+    const portalDb = await PortalDb.create(keypair, relays);
+    return new NostrStoreService(portalDb);
+  }
+
+  async storeMints(mints: string[]): Promise<void> {
+    const mintsJson = JSON.stringify(mints);
+    return await this.portalDb.store(MINTS_KEY, mintsJson);
+  }
+
+  async readMints(): Promise<string[]> {
+    try {
+      const mintsJson = await Promise.race([
+        this.portalDb.read(MINTS_KEY),
+        new Promise<string>((_, reject) =>
+          setTimeout(() => reject(new Error('Timeout reading mints from NostrStore')), 5000)
+        ),
+      ]);
+      return JSON.parse(mintsJson);
+    } catch (_error) {
+      return [];
+    }
+  }
+}

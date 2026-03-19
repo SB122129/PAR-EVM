@@ -1,0 +1,140 @@
+import { router } from 'expo-router';
+import * as SecureStore from 'expo-secure-store';
+import { useEffect } from 'react';
+import { ActivityIndicator, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { onboardingStyles as styles } from '@/components/onboarding/styles';
+import { ThemedText } from '@/components/ThemedText';
+import { ThemedView } from '@/components/ThemedView';
+import { useNostrService } from '@/context/NostrServiceContext';
+import { SEED_ORIGIN_KEY, useOnboardingFlow } from '@/context/OnboardingFlowContext';
+import { useUserProfile } from '@/context/UserProfileContext';
+import { useThemeColor } from '@/hooks/useThemeColor';
+import { getMnemonic, getNsec } from '@/services/SecureStorageService';
+import { generateRandomGamertag } from '@/utils/common';
+
+export default function ProfileSetup() {
+  const backgroundColor = useThemeColor({}, 'background');
+  const buttonPrimary = useThemeColor({}, 'buttonPrimary');
+
+  const nostrService = useNostrService();
+  const { fetchProfile, setProfile, waitForProfileSetup, waitForSync, hasProfileAssigned } =
+    useUserProfile();
+  const { setOnboardingError } = useOnboardingFlow();
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const handleProfileSetup = async () => {
+      try {
+        // Check if this is an import FIRST, before waiting for service initialization
+        // This prevents any race conditions with profile generation
+        const seedOrigin = await SecureStore.getItemAsync(SEED_ORIGIN_KEY);
+        const isImport = seedOrigin === 'imported';
+
+        // Handle interrupted onboarding: if SEED_ORIGIN_KEY was never written but a key exists,
+        // treat it as interrupted onboarding and wait for auto-fetch to load existing profile
+        // Check SecureStore directly (synchronous check) instead of relying on KeyContext
+        // which loads asynchronously and might not be ready yet
+        const existingMnemonic = await getMnemonic();
+        const existingNsec = await getNsec();
+        const hasExistingKey = Boolean(existingMnemonic || existingNsec);
+        const isInterruptedOnboarding = !seedOrigin && hasExistingKey;
+
+        // Both paths need the service ready
+        let retries = 0;
+        const maxRetries = 30;
+        while (!nostrService.isInitialized && retries < maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+          retries++;
+        }
+
+        if (!nostrService.isInitialized || !nostrService.publicKey) {
+          return false;
+        }
+
+        if (isImport) {
+          await waitForSync(5000); // wait for auto-fetch to finish, max 5s
+          return true;
+        }
+
+        // Handle interrupted onboarding: wait for auto-fetch to load existing profile
+        // Treat it like an import: wait for auto-fetch, then proceed regardless of result
+        // This prevents generating random data when a profile might exist but fetch failed
+        if (isInterruptedOnboarding) {
+          await waitForSync(5000); // wait for auto-fetch to finish, max 5s
+          // Proceed regardless of whether profile was found
+          // If profile exists, it was loaded by auto-fetch; if not, proceed without generating random data
+          return true;
+        }
+
+        // New account flow
+        if (hasProfileAssigned()) {
+          return true;
+        }
+
+        const result = await fetchProfile(nostrService.publicKey);
+        if (result.found && result.username) {
+          return await waitForProfileSetup(15000);
+        }
+
+        const randomUsername = generateRandomGamertag();
+        try {
+          await setProfile(randomUsername, '');
+          return await waitForProfileSetup(15000);
+        } catch (_error) {
+          return false;
+        }
+      } catch (_error) {
+        return false;
+      }
+    };
+
+    const run = async () => {
+      const success = await handleProfileSetup();
+      if (!isMounted) return;
+      if (success) {
+        router.replace('/(onboarding)/identity-verification');
+      } else {
+        setOnboardingError({
+          message:
+            "We couldn't set up your profile right now. This might be due to a network connection issue.",
+          icon: 'error',
+          retryRoute: '/(onboarding)/profile-setup',
+        });
+        router.replace('/(onboarding)/onboarding-error');
+      }
+    };
+
+    run();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [
+    nostrService,
+    fetchProfile,
+    setProfile,
+    waitForProfileSetup,
+    waitForSync,
+    hasProfileAssigned,
+  ]);
+
+  return (
+    <SafeAreaView style={[styles.safeArea, { backgroundColor }]} edges={['top']}>
+      <ThemedView style={styles.container}>
+        <View style={[styles.stepWrapper, styles.pinSetupFull]}>
+          <View style={styles.pinSetupContent}>
+            <ThemedText type="title" style={styles.title}>
+              Setting Up Your Profile
+            </ThemedText>
+            <ThemedText style={styles.subtitle}>
+              Please wait while we set up your digital identity...
+            </ThemedText>
+            <ActivityIndicator size="large" color={buttonPrimary} style={styles.loadingSpinner} />
+          </View>
+        </View>
+      </ThemedView>
+    </SafeAreaView>
+  );
+}

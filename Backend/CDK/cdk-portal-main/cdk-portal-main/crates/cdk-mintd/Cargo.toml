@@ -1,0 +1,69 @@
+[package]
+name = "cdk-mintd"
+version.workspace = true
+edition.workspace = true
+authors = ["CDK Developers"]
+license.workspace = true
+homepage = "https://github.com/cashubtc/cdk"
+repository = "https://github.com/cashubtc/cdk.git"
+description = "CDK mint binary"
+rust-version.workspace = true
+readme = "README.md"
+
+[features]
+default = ["management-rpc", "cln", "lnd", "lnbits", "fakewallet", "grpc-processor", "auth", "portalwallet"]
+# Ensure at least one lightning backend is enabled
+management-rpc = ["cdk-mint-rpc"]
+cln = ["dep:cdk-cln"]
+lnd = ["dep:cdk-lnd"]
+lnbits = ["dep:cdk-lnbits"]
+fakewallet = ["dep:cdk-fake-wallet"]
+portalwallet = ["dep:cdk-portal-wallet"]
+grpc-processor = ["dep:cdk-payment-processor", "cdk-signatory/grpc"]
+sqlcipher = ["cdk-sqlite/sqlcipher"]
+# MSRV is not committed to with swagger enabled
+swagger = ["cdk-axum/swagger", "dep:utoipa", "dep:utoipa-swagger-ui"]
+redis = ["cdk-axum/redis"]
+auth = ["cdk/auth", "cdk-sqlite/auth", "cdk-axum/auth"]
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+axum.workspace = true
+cdk = { workspace = true, features = [
+    "mint",
+] }
+cdk-sqlite = { workspace = true, features = [
+    "mint",
+] }
+cdk-cln = { workspace = true, optional = true }
+cdk-lnbits = { workspace = true, optional = true }
+cdk-lnd = { workspace = true, optional = true }
+cdk-fake-wallet = { workspace = true, optional = true }
+cdk-portal-wallet = { workspace = true, optional = true }
+cdk-axum.workspace = true
+cdk-signatory.workspace = true
+cdk-mint-rpc = { workspace = true, optional = true }
+cdk-payment-processor = { workspace = true, optional = true }
+config = { version = "0.15.11", features = ["toml"] }
+clap.workspace = true
+bitcoin.workspace = true
+tokio = { workspace = true, default-features = false, features = ["signal"] }
+tracing.workspace = true
+tracing-subscriber.workspace = true
+futures.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+bip39.workspace = true
+tower-http = { workspace = true, features = ["compression-full", "decompression-full"] }
+tower = "0.5.2"
+lightning-invoice.workspace = true
+home.workspace = true
+url.workspace = true
+utoipa = { workspace = true, optional = true }
+utoipa-swagger-ui = { version = "9.0.0", features = ["axum"], optional = true }
+
+[build-dependencies]
+# Dep of utopia 2.5.0 breaks so keeping here for now
+zip = "=2.4.2"
+time = "=0.3.39"

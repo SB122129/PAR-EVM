@@ -1,0 +1,107 @@
+[package]
+name = "cdk"
+version.workspace = true
+edition.workspace = true
+authors = ["CDK Developers"]
+description = "Core Cashu Development Kit library implementing the Cashu protocol"
+homepage = "https://github.com/cashubtc/cdk"
+repository = "https://github.com/cashubtc/cdk.git"
+rust-version.workspace = true                                                            # MSRV
+license.workspace = true
+
+
+[features]
+default = ["mint", "wallet", "auth"]
+wallet = ["dep:reqwest", "cdk-common/wallet", "dep:rustls"]
+mint = ["dep:futures", "dep:reqwest", "cdk-common/mint", "cdk-signatory"]
+auth = ["dep:jsonwebtoken", "cdk-common/auth", "cdk-common/auth"]
+# We do not commit to a MSRV with swagger enabled
+swagger = ["mint", "dep:utoipa", "cdk-common/swagger"]
+bench = []
+http_subscription = []
+
+
+[dependencies]
+cdk-common.workspace = true
+cbor-diag.workspace = true
+async-trait.workspace = true
+anyhow.workspace = true
+bitcoin.workspace = true
+ciborium.workspace = true
+lightning-invoice.workspace = true
+regex.workspace = true
+reqwest = { workspace = true, optional = true }
+serde.workspace = true
+serde_json.workspace = true
+serde_with.workspace = true
+tracing.workspace = true
+thiserror.workspace = true
+futures = { workspace = true, optional = true, features = ["alloc"] }
+url.workspace = true
+utoipa = { workspace = true, optional = true }
+uuid.workspace = true
+jsonwebtoken = { workspace = true, optional = true }
+
+# -Z minimal-versions
+sync_wrapper = "0.1.2"
+bech32 = "0.9.1"
+arc-swap = "1.7.1"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tokio = { workspace = true, features = [
+    "rt-multi-thread",
+    "time",
+    "macros",
+    "sync",
+] }
+getrandom = { version = "0.2" }
+cdk-signatory = { workspace = true, features = ["grpc"], optional = true }
+tokio-tungstenite = { workspace = true, features = [
+    "rustls",
+    "rustls-tls-native-roots",
+    "connect"
+] }
+rustls = { workspace = true, optional = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+tokio = { workspace = true, features = ["rt", "macros", "sync", "time"] }
+cdk-signatory = { workspace = true, default-features = false }
+getrandom = { version = "0.2", features = ["js"] }
+ring = { version = "0.17.14", features = ["wasm32_unknown_unknown_js"] }
+
+[[example]]
+name = "mint-token"
+required-features = ["wallet"]
+
+[[example]]
+name = "melt-token"
+required-features = ["wallet"]
+
+[[example]]
+name = "p2pk"
+required-features = ["wallet"]
+
+[[example]]
+name = "wallet"
+required-features = ["wallet"]
+
+[[example]]
+name = "proof-selection"
+required-features = ["wallet"]
+
+[[example]]
+name = "auth_wallet"
+required-features = ["wallet", "auth"]
+
+[dev-dependencies]
+rand.workspace = true
+cdk-sqlite.workspace = true
+bip39.workspace = true
+tracing-subscriber.workspace = true
+criterion = "0.6.0"
+reqwest = { workspace = true }
+
+
+[[bench]]
+name = "dhke_benchmarks"
+harness = false

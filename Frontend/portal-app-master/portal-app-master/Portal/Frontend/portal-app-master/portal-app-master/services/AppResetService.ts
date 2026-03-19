@@ -1,0 +1,123 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as FileSystem from 'expo-file-system';
+import { router } from 'expo-router';
+import type { SQLiteDatabase } from 'expo-sqlite';
+import { resetAllContexts } from './ContextResetService';
+import { DatabaseService } from './DatabaseService';
+import { PortalAppManager } from './PortalAppManager';
+import { SecureStorageService } from './SecureStorageServiceV2';
+
+/**
+ * Global reset flag to coordinate reset process
+ */
+let isAppResetting = false;
+
+/**
+ * Check if app is currently resetting
+ */
+export const isAppInResetMode = (): boolean => {
+  return isAppResetting;
+};
+
+/**
+ * Comprehensive App Reset Service
+ *
+ * This service coordinates a complete app reset including:
+ * - All SecureStore data
+ * - All database tables and data
+ * - Navigation state reset
+ * - Context state cleanup
+ *
+ * Fixes issues #71 and #72:
+ * - #71: Correctly clear all secure storage entries
+ * - #72: Ensure proper profile refresh after reset
+ */
+export class AppResetService {
+  /**
+   * Perform a complete app reset
+   *
+   * @param database Optional database instance for reset. If not provided, uses legacy reset method.
+   * @returns Promise that resolves when reset is complete
+   */
+  static async performCompleteReset(database?: SQLiteDatabase): Promise<void> {
+    // Set global reset flag
+    isAppResetting = true;
+
+    const errors: Array<{ step: string; error: unknown }> = [];
+
+    try {
+      // Step 1: Clear all SecureStore data
+      await SecureStorageService.resetAll();
+    } catch (error) {
+      errors.push({ step: 'SecureStore', error });
+    }
+
+    try {
+      // Step 2: Reset database and force reinitialization
+      if (database) {
+        const dbService = new DatabaseService(database);
+
+        // Then, force a full migration to recreate all tables
+        await dbService.resetAndReinitializeDatabase();
+      }
+    } catch (error) {
+      errors.push({ step: 'Database', error });
+    }
+
+    try {
+      // Step 3: Reset all application contexts
+      resetAllContexts();
+    } catch (error) {
+      errors.push({ step: 'Contexts', error });
+    }
+
+    try {
+      // Step 4: Reset navigation to onboarding
+      router.replace('/(onboarding)/welcome');
+    } catch (error) {
+      errors.push({ step: 'Navigation', error });
+    }
+
+    // Step 5: Clear AsyncStorage
+    try {
+      await AsyncStorage.clear();
+    } catch (error) {
+      errors.push({ step: 'Storage', error });
+    }
+
+    // Step 6: Clear breez working directory
+    try {
+      await FileSystem.deleteAsync(`${FileSystem.documentDirectory}breez-wallet`, {
+        idempotent: true,
+      });
+    } catch (error) {
+      errors.push({ step: 'BreezCache', error });
+    }
+
+    // Step 7: Set flag to show toast in onboarding (after clearing AsyncStorage)
+    // Use a small delay to ensure onboarding screen has mounted
+    setTimeout(async () => {
+      try {
+        await AsyncStorage.setItem('app_reset_complete', 'true');
+      } catch (_error) {
+        // Ignore errors setting flag
+      }
+    }, 100);
+
+    // Step 8: Deleting app instance
+    PortalAppManager.clearInstance();
+
+    // Clear global reset flag after a delay to allow reset to complete
+    setTimeout(() => {
+      isAppResetting = false;
+    }, 10000); // 10 second delay
+
+    // Report results
+    if (errors.length === 0) {
+    } else {
+    }
+
+    // Even if there were errors, the reset likely succeeded enough to be functional
+    // The app should still navigate to onboarding and work properly
+  }
+}
